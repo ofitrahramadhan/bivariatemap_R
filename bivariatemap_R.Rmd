@@ -1,0 +1,114 @@
+---
+title: "bivariate_map"
+author: "Fitrah Ramadhan"
+date: "2023-12-24"
+output: html_document
+---
+
+### Import Package
+
+```{r include=FALSE}
+
+#libraries we need
+libs <- c('tidyverse','sf','here','janitor','biscale','ggplot2','cowplot')
+
+#install missing libraries
+installed_libs <- libs %in% rownames(installed.packages())
+if (any(installed_libs == F)) {
+  install.packages(libs[!installed_libs])
+}
+
+#load packages
+invisible(lapply(libs, library, character.only = T))
+
+#check version
+checkVersion <- function(packages) {
+  print(paste(packages," : ", packageVersion(packages)))
+}
+
+invisible(lapply(libs, checkVersion))
+
+```
+
+### Read Data
+
+```{r include=FALSE}
+
+pbcc <- read_csv(here::here('Data','PBCC_LSOA_data.csv'))
+pbcc <- pbcc %>%
+  janitor::clean_names() %>%
+  dplyr::select('lsoa11', 'lsoa11nm','soac11nm', 'lad17cd', 'lad17nm', 'wd18nm', 'pop_2018', 'total_kgco2e_percap')
+
+lsoa <- sf::st_read(here::here('Data','england_lsoa_2011.shp')) %>% st_transform(27700) %>%
+  janitor::clean_names()
+
+```
+
+### Join Data
+
+```{r}
+
+
+lsoa <- lsoa %>%
+  dplyr::left_join(., pbcc, join_by(code == lsoa11)) %>%
+  janitor::clean_names() %>%
+  dplyr::select('code',
+                'name',
+                'soac11nm',
+                'pop_2018',
+                'total_kgco2e_percap') %>%
+  na.omit(.)
+```
+
+```{r}
+
+lsoa <- lsoa %>%
+  dplyr::mutate(area = sf::st_area(.)) %>%
+  dplyr::mutate(density = as.numeric(pop_2018/area))
+```
+
+### Bivariate Map
+
+```{r}
+
+data <- biscale::bi_class(lsoa, x = density, y = total_kgco2e_percap, style='fisher' , dim = 3)
+```
+
+```{r}
+
+# create map
+map <- ggplot() +
+  geom_sf(data = data, mapping = aes(fill = bi_class), color = "white", size = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "GrPink", dim = 3) + bi_theme()
+  #labs(
+    #title = "Population Density and Carbon Footprint in England County",
+    #subtitle = "Gray Pink (GrPink) Palette"
+  #) #+
+```
+
+```{r}
+
+legend <- bi_legend(pal = "GrPink",
+                    dim = 3,
+                    xlab = "PopDen ",
+                    ylab = "CarFoot ",
+                    size = 8)
+```
+
+```{r}
+
+# combine map with legend
+finalPlot <- cowplot::ggdraw() +
+  draw_plot(map, 0, 0, 1, 1) +
+  draw_plot(legend, 0.2, .65, 0.2, 0.2)
+```
+
+```{r}
+
+plot(finalPlot)
+```
+
+```{r}
+
+ggsave("boundary.png", plot = plot, width = 6, height = 4, units = "in")
+```
