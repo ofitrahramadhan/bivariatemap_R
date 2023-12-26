@@ -1,5 +1,7 @@
 #Data folder
 Data/*
+.png
+.gpkg
 
 # History files
 .Rhistory

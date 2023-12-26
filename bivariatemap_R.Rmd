@@ -10,7 +10,7 @@ output: html_document
 ```{r include=FALSE}
 
 #libraries we need
-libs <- c('tidyverse','sf','here','janitor','biscale','ggplot2','cowplot')
+libs <- c('tidyverse','sf','here','janitor','biscale','ggplot2','cowplot','rayshader')
 
 #install missing libraries
 installed_libs <- libs %in% rownames(installed.packages())
@@ -34,14 +34,15 @@ invisible(lapply(libs, checkVersion))
 
 ```{r include=FALSE}
 
-pbcc <- read_csv(here::here('Data','PBCC_LSOA_data.csv'))
+pbcc <- read_csv('https://www.dropbox.com/scl/fi/6l1i80t0thka7ldgmnzm1/PBCC_LSOA_data.csv?rlkey=reg0mbe6b9inp5586iugxxhk4&dl=1')
 pbcc <- pbcc %>%
   janitor::clean_names() %>%
   dplyr::select('lsoa11', 'lsoa11nm','soac11nm', 'lad17cd', 'lad17nm', 'wd18nm', 'pop_2018', 'total_kgco2e_percap')
 
-lsoa <- sf::st_read(here::here('Data','england_lsoa_2011.shp')) %>% st_transform(27700) %>%
+lsoa <- sf::st_read('https://www.dropbox.com/scl/fi/vvwhjbrl8c9akc8x5qoc6/lsoa_england.gpkg?rlkey=qarh74y8hmn0eaxu81inlbafb&dl=1') %>% st_transform(27700) %>%
   janitor::clean_names()
 
+london <- st_read('https://www.dropbox.com/scl/fi/j2f42gri152net15zqu0e/london_border.gpkg?rlkey=di3lf5tdbca14nehie3cdks3q&dl=1')
 ```
 
 ### Join Data
@@ -67,19 +68,24 @@ lsoa <- lsoa %>%
   dplyr::mutate(density = as.numeric(pop_2018/area))
 ```
 
+```{r}
+
+lsoa_london <- sf::st_intersection(lsoa, london)
+```
+
 ### Bivariate Map
 
 ```{r}
 
-data <- biscale::bi_class(lsoa, x = density, y = total_kgco2e_percap, style='fisher' , dim = 3)
+data <- biscale::bi_class(lsoa_london, x = density, y = total_kgco2e_percap, style='fisher' , dim = 4)
 ```
 
 ```{r}
 
 # create map
 map <- ggplot() +
-  geom_sf(data = data, mapping = aes(fill = bi_class), color = "white", size = 0.1, show.legend = FALSE) +
-  bi_scale_fill(pal = "GrPink", dim = 3) + bi_theme()
+  geom_sf(data = data, mapping = aes(fill = bi_class), color = "transparent", size = 0, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet2", dim = 4) + bi_theme()
   #labs(
     #title = "Population Density and Carbon Footprint in England County",
     #subtitle = "Gray Pink (GrPink) Palette"
@@ -88,11 +94,11 @@ map <- ggplot() +
 
 ```{r}
 
-legend <- bi_legend(pal = "GrPink",
-                    dim = 3,
+legend <- bi_legend(pal = "DkViolet2",
+                    dim = 4,
                     xlab = "PopDen ",
                     ylab = "CarFoot ",
-                    size = 8)
+                    size = 6.5)
 ```
 
 ```{r}
@@ -100,7 +106,7 @@ legend <- bi_legend(pal = "GrPink",
 # combine map with legend
 finalPlot <- cowplot::ggdraw() +
   draw_plot(map, 0, 0, 1, 1) +
-  draw_plot(legend, 0.2, .65, 0.2, 0.2)
+  draw_plot(legend, 0, 0, 0.25, 0.25)
 ```
 
 ```{r}
@@ -110,5 +116,17 @@ plot(finalPlot)
 
 ```{r}
 
-ggsave("boundary.png", plot = plot, width = 6, height = 4, units = "in")
+plot_gg(finalPlot,
+  multicore = T,
+  width=3,
+  height=3,
+  scale=5,
+  shadow_intensity = .75,
+  sunangle = 315,
+  offset_edges=5,
+  windowsize=c(1400,866),
+  zoom = .4, 
+  phi = 30, 
+  theta = -30)
+
 ```
